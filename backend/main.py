@@ -41,14 +41,26 @@ app = FastAPI(
 
 # CORS middleware
 # Get allowed origins from environment variable or use defaults
-allowed_origins = os.getenv("FRONTEND_URL", "http://localhost:5173").split(",")
+allowed_origins_str = os.getenv("FRONTEND_URL", "http://localhost:5173")
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",")]
+
 # Add localhost variants for development
-if "http://localhost:5173" not in allowed_origins:
-    allowed_origins.extend(["http://localhost:5173", "http://localhost:3000"])
+development_origins = ["http://localhost:5173", "http://localhost:3000", "http://localhost:5174"]
+for dev_origin in development_origins:
+    if dev_origin not in allowed_origins:
+        allowed_origins.append(dev_origin)
+
+# For Railway deployments, allow Railway domains
+if os.getenv("RAILWAY_ENVIRONMENT"):
+    # Allow all Railway.app domains in Railway environment
+    allow_origin_regex = r"https://.*\.up\.railway\.app"
+else:
+    allow_origin_regex = None
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -601,4 +613,7 @@ async def manual_cleanup():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import os
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
+

@@ -1,0 +1,5 @@
+# Railway Configuration for Video Downloader
+
+# This file is currently for reference only
+# Railway will auto-detect services from the project structure
+# Deploy backend and frontend as separate services in Railway dashboard
