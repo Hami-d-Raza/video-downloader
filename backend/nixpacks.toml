@@ -1,11 +1,8 @@
 [phases.setup]
-nixPkgs = ["python39", "ffmpeg", "gcc"]
+nixPkgs = ["python39", "ffmpeg"]
 
 [phases.install]
 cmds = ["pip install --upgrade pip", "pip install -r requirements.txt"]
-
-[phases.build]
-cmds = []
 
 [start]
 cmd = "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
