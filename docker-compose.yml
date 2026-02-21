@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: video-downloader-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - HOST=0.0.0.0
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000
+      - MAX_FILE_AGE_HOURS=1
+      - MAX_REQUESTS_PER_MINUTE=20
+    volumes:
+      - ./backend/downloads:/app/downloads
+    restart: unless-stopped
+    networks:
+      - video-downloader-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: video-downloader-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - video-downloader-network
+
+networks:
+  video-downloader-network:
+    driver: bridge
+
+volumes:
+  downloads:
