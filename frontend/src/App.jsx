@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import HomePage from './pages/HomePage'
 import ResultsPage from './pages/ResultsPage'
+import PlaylistPage from './pages/PlaylistPage'
 import Header from './components/Header'
 import Footer from './components/Footer'
 import { ThemeProvider } from './context/ThemeContext'
@@ -15,6 +16,7 @@ function App() {
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/results" element={<ResultsPage />} />
+              <Route path="/playlist" element={<PlaylistPage />} />
             </Routes>
           </main>
           <Footer />

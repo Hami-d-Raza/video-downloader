@@ -5,10 +5,12 @@ Uses yt-dlp to download videos from various platforms
 
 import os
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import yt_dlp
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import zipfile
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -43,13 +45,13 @@ class VideoDownloader:
     
     async def get_video_info(self, url: str) -> Optional[Dict[str, Any]]:
         """
-        Get video information without downloading
+        Get video/post information without downloading
         
         Args:
-            url: Video URL
+            url: Video or post URL
             
         Returns:
-            Dictionary containing video metadata
+            Dictionary containing media metadata
         """
         try:
             ydl_opts = {
@@ -61,7 +63,10 @@ class VideoDownloader:
                 'writeautomaticsub': False,
                 # Additional options for better metadata extraction
                 'extract_flat': False,
-                'no_playlist': True,
+                # Don't restrict to single items - allows carousel/image posts
+                'no_playlist': False,
+                # For Instagram, we need to allow image-only posts
+                'ignoreerrors': False,
             }
             
             # Run in executor to avoid blocking
@@ -73,6 +78,10 @@ class VideoDownloader:
                 ydl_opts
             )
             
+            # If info is None but it might be an Instagram image post, try to get basic info
+            if not info:
+                logger.warning("No info extracted, might be an unsupported post type")
+            
             return info
         
         except Exception as e:
@@ -81,14 +90,14 @@ class VideoDownloader:
     
     def _extract_info(self, url: str, ydl_opts: dict) -> Optional[Dict[str, Any]]:
         """
-        Extract video information (runs in thread pool)
+        Extract video/post information (runs in thread pool)
         
         Args:
-            url: Video URL
+            url: Video or post URL
             ydl_opts: yt-dlp options
             
         Returns:
-            Video information dictionary
+            Media information dictionary
         """
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -282,3 +291,116 @@ class VideoDownloader:
         except Exception as e:
             logger.error(f"yt-dlp download error: {e}")
             raise
+    
+    async def get_playlist_info(self, url: str) -> Optional[Dict[str, Any]]:
+        """
+        Get playlist information
+        
+        Args:
+            url: Playlist URL
+            
+        Returns:
+            Dictionary containing playlist metadata and video entries
+        """
+        try:
+            ydl_opts = {
+                **self.base_opts,
+                'skip_download': True,
+                'extract_flat': 'in_playlist',  # Get playlist info without downloading
+                'playlistend': 50,  # Limit to first 50 videos for performance
+            }
+            
+            # Run in executor to avoid blocking
+            loop = asyncio.get_event_loop()
+            info = await loop.run_in_executor(
+                self.executor,
+                self._extract_info,
+                url,
+                ydl_opts
+            )
+            
+            return info
+        
+        except Exception as e:
+            logger.error(f"Error getting playlist info: {e}")
+            return None
+
+    async def download_batch(self, urls: List[str], format_id: Optional[str] = None, audio_only: bool = False) -> Optional[Dict[str, Any]]:
+        """
+        Download multiple videos and package them into a ZIP file
+        
+        Args:
+            urls: List of video URLs to download
+            format_id: Format ID for video quality (e.g., '1080p', '720p')
+            audio_only: If True, download only audio
+            
+        Returns:
+            Dictionary containing ZIP file path and download statistics
+        """
+        try:
+            downloaded_files = []
+            failed_count = 0
+            
+            logger.info(f"Starting batch download of {len(urls)} videos")
+            
+            # Download each video
+            for idx, url in enumerate(urls, 1):
+                try:
+                    logger.info(f"Downloading video {idx}/{len(urls)}: {url}")
+                    result = await self.download_video(url, format_id, audio_only)
+                    
+                    if result and 'filepath' in result:
+                        filepath = result['filepath']
+                        if os.path.exists(filepath):
+                            downloaded_files.append(filepath)
+                            logger.info(f"Successfully downloaded {idx}/{len(urls)}: {os.path.basename(filepath)}")
+                        else:
+                            logger.error(f"File not found after download: {filepath}")
+                            failed_count += 1
+                    else:
+                        logger.error(f"Failed to download video {idx}/{len(urls)}")
+                        failed_count += 1
+                        
+                except Exception as e:
+                    logger.error(f"Error downloading video {idx}/{len(urls)}: {e}")
+                    failed_count += 1
+            
+            if not downloaded_files:
+                logger.error("No videos were successfully downloaded")
+                return None
+            
+            # Create ZIP file
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            zip_filename = f"videos_batch_{timestamp}.zip"
+            zip_filepath = os.path.join(self.download_dir, zip_filename)
+            
+            logger.info(f"Creating ZIP file: {zip_filename}")
+            
+            with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for filepath in downloaded_files:
+                    # Add file to ZIP with just the filename (no path)
+                    arcname = os.path.basename(filepath)
+                    zipf.write(filepath, arcname)
+                    logger.info(f"Added to ZIP: {arcname}")
+                    
+                    # Delete original file after adding to ZIP
+                    try:
+                        os.remove(filepath)
+                        logger.info(f"Deleted original file: {filepath}")
+                    except Exception as e:
+                        logger.warning(f"Failed to delete original file {filepath}: {e}")
+            
+            logger.info(f"Batch download complete. ZIP created: {zip_filename}")
+            
+            return {
+                'filepath': zip_filepath,
+                'filename': zip_filename,
+                'total': len(urls),
+                'successful': len(downloaded_files),
+                'failed': failed_count
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in batch download: {e}", exc_info=True)
+            return None
+

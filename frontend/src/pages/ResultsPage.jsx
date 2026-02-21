@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import { Download, ArrowLeft, CheckCircle, Clock, Eye, User } from 'lucide-react';
-import { downloadVideo, getFileUrl } from '../api/client';
+import { Download, ArrowLeft, CheckCircle, Clock, Eye, User, Package } from 'lucide-react';
+import { downloadVideo, downloadBatch, getFileUrl } from '../api/client';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -14,17 +14,23 @@ const ResultsPage = () => {
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [downloadUrl, setDownloadUrl] = useState('');
   const [thumbnailError, setThumbnailError] = useState(false);
+  
+  // Batch mode support
+  const isBatchMode = location.state?.batchMode || false;
+  const batchUrls = location.state?.batchUrls || [];
+  const batchCount = location.state?.batchCount || 0;
+  const playlistTitle = location.state?.playlistTitle || '';
 
   const videoData = location.state?.videoData;
   const url = location.state?.url;
 
   useEffect(() => {
-    if (!videoData || !url) {
+    if (!videoData) {
       navigate('/');
     }
-  }, [videoData, url, navigate]);
+  }, [videoData, navigate]);
 
-  if (!videoData || !url) {
+  if (!videoData) {
     return null;
   }
 
@@ -42,20 +48,30 @@ const ResultsPage = () => {
       const isAudioOnly = selectedFormat === 'audio';
       const formatId = isAudioOnly ? null : selectedFormat;
 
-      const result = await downloadVideo(url, formatId, isAudioOnly);
+      let result;
+      
+      if (isBatchMode) {
+        // Batch download - download all videos as ZIP
+        result = await downloadBatch(batchUrls, formatId, isAudioOnly);
+      } else {
+        // Single video download
+        result = await downloadVideo(url, formatId, isAudioOnly);
+      }
 
       if (result.status === 'success' && result.filename) {
         setDownloadSuccess(true);
         const fileUrl = getFileUrl(result.filename);
         setDownloadUrl(fileUrl);
 
+        // Trigger automatic download
         window.location.href = fileUrl;
+        setLoading(false);
       } else {
         setError('Download failed. Please try again.');
+        setLoading(false);
       }
     } catch (err) {
-      setError(err.detail || 'Failed to download video. Please try again.');
-    } finally {
+      setError(err.detail || 'Failed to download. Please try again.');
       setLoading(false);
     }
   };
@@ -72,7 +88,39 @@ const ResultsPage = () => {
           Back to Home
         </Link>
 
-        {/* Video Info Card */}
+        {/* Batch Mode Indicator */}
+        {isBatchMode && (
+          <div className="card p-4 mb-4 bg-green-50 dark:bg-green-950/30 border-green-200 dark:border-green-800">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-green-600 text-white flex items-center justify-center">
+                  <Package className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="font-semibold text-green-900 dark:text-green-300">
+                    Batch Download Mode
+                  </p>
+                  <p className="text-sm text-green-700 dark:text-green-400">
+                    {batchCount} videos selected from "{playlistTitle}"
+                  </p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-xl font-bold text-green-800 dark:text-green-400">
+                  {batchCount}
+                </p>
+                <p className="text-xs text-green-600 dark:text-green-500">videos</p>
+              </div>
+            </div>
+            <div className="mt-3 pt-3 border-t border-green-200 dark:border-green-800">
+              <p className="text-sm text-green-800 dark:text-green-400">
+                📦 All videos will be downloaded in a single ZIP file
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Content Info Card */}
         <div className="card p-6 mb-6">
           <div className="flex flex-col md:flex-row gap-6">
             {/* Thumbnail */}
@@ -131,9 +179,19 @@ const ResultsPage = () => {
 
         {/* Format Selection Card */}
         <div className="card p-6 mb-6">
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
             Select Format & Quality
           </h3>
+          
+          {isBatchMode ? (
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              ⚠️ <strong>Batch Download:</strong> All {batchCount} videos will be downloaded in the selected quality and packaged as a ZIP file. Large batches may take 5-30 minutes.
+            </p>
+          ) : (
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              ⚠️ <strong>Note:</strong> Large files (HD/4K) may take 2-10 minutes to process. Please be patient.
+            </p>
+          )}
 
           <div className="space-y-2 mb-6">
             {videoData.formats && videoData.formats.length > 0 ? (
@@ -183,19 +241,33 @@ const ResultsPage = () => {
           )}
 
           {downloadSuccess && (
-            <div className="mb-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
-              <div className="flex items-center space-x-2">
-                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-500" />
+            <div className="mb-4 bg-green-50 dark:bg-green-950/30 border-2 border-green-500 dark:border-green-600 rounded-lg p-4">
+              <div className="flex items-start space-x-3">
+                <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-500 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-green-800 dark:text-green-400">Download Started!</p>
+                  {isBatchMode ? (
+                    <>
+                      <p className="font-bold text-green-800 dark:text-green-400 text-lg mb-1">ZIP Download Ready!</p>
+                      <p className="text-sm text-green-700 dark:text-green-500 mb-2">
+                        Your ZIP file with {batchCount} videos is ready! Download should start automatically.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-bold text-green-800 dark:text-green-400 text-lg mb-1">Download Ready!</p>
+                      <p className="text-sm text-green-700 dark:text-green-500 mb-2">
+                        Your download should start automatically.
+                      </p>
+                    </>
+                  )}
                   <p className="text-sm text-green-700 dark:text-green-500">
-                    If download doesn't start,{' '}
+                    If it doesn't start,{' '}
                     <a
                       href={downloadUrl}
-                      className="underline font-medium hover:text-green-900 dark:hover:text-green-300"
+                      className="underline font-semibold hover:text-green-900 dark:hover:text-green-300"
                       download
                     >
-                      click here
+                      click here to download manually
                     </a>
                   </p>
                 </div>
@@ -204,27 +276,109 @@ const ResultsPage = () => {
           )}
 
           <button
-            onClick={handleDownload}
-            disabled={loading || !selectedFormat}
-            className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-          >
-            <Download className="w-5 h-5" />
-            <span>{loading ? 'Downloading...' : 'Download Video'}</span>
+                onClick={handleDownload}
+                disabled={loading || !selectedFormat}
+                className="btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+              >
+                {loading ? (
+                  <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                <span>
+                  {isBatchMode 
+                    ? 'Downloading All Videos...' 
+                    : 'Downloading...'}
+                </span>
+              </>
+            ) : (
+              <>
+                <Download className="w-5 h-5" />
+                <span>
+                  {isBatchMode 
+                    ? `Download All ${batchCount} Videos as ZIP` 
+                   : 'Download Video'}
+                </span>
+              </>
+            )}
           </button>
 
           {loading && (
-            <div className="mt-6">
-              <LoadingSpinner message="Preparing your download..." />
+            <div className="mt-6 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400"></div>
+                </div>
+                <div className="flex-1">
+                  {isBatchMode ? (
+                    <>
+                      <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">
+                        Downloading {batchCount} Videos...
+                      </h3>
+                      <div className="space-y-2 text-sm text-blue-800 dark:text-blue-400">
+                        <p>⏳ <strong>Please wait</strong> - The server is downloading all {batchCount} videos and creating a ZIP file</p>
+                        <p>📦 All videos will be packaged in a single ZIP file for easy download</p>
+                        <p>⏱️ <strong>Estimated time:</strong> {batchCount} × 2-5 minutes = {batchCount * 2}-{batchCount * 5} minutes for HD quality</p>
+                        <p>✅ Your ZIP download will start automatically when ready</p>
+                        <p className="text-blue-700 dark:text-blue-500 italic mt-3">
+                          <strong>Note:</strong> Do not close or refresh this page
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">
+                        Downloading Video...
+                      </h3>
+                      <div className="space-y-2 text-sm text-blue-800 dark:text-blue-400">
+                        <p>⏳ <strong>Please wait</strong> - The server is downloading and processing your video</p>
+                        <p>📥 Large files (HD/4K) may take <strong>2-10 minutes</strong> depending on size and quality</p>
+                        <p>✅ Your download will start automatically when ready</p>
+                        <p className="text-blue-700 dark:text-blue-500 italic mt-3">
+                          <strong>Note:</strong> Do not close or refresh this page
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>
 
         {/* Info Box */}
         <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
-          <p className="text-sm text-green-800 dark:text-green-400">
-            <strong>💡 Tip:</strong> Higher quality videos may take longer to download.
-            Audio-only downloads are faster and smaller in size.
-          </p>
+          <div className="space-y-2">
+            {isBatchMode ? (
+              <>
+                <p className="text-sm text-green-800 dark:text-green-400">
+                  <strong>💡 Batch Download Times (per video):</strong>
+                </p>
+                <ul className="text-sm text-green-800 dark:text-green-400 space-y-1 ml-4">
+                  <li>• Audio only: ~1 minute × {batchCount} = ~{batchCount} minutes total</li>
+                  <li>• 360p-480p: ~2 minutes × {batchCount} = ~{batchCount * 2} minutes total</li>
+                  <li>• 720p-1080p: ~4 minutes × {batchCount} = ~{batchCount * 4} minutes total</li>
+                  <li>• 2K-4K: ~8 minutes × {batchCount} = ~{batchCount * 8} minutes total</li>
+                </ul>
+                <p className="text-sm text-green-800 dark:text-green-400 mt-2">
+                  <strong>Tip:</strong> Lower quality downloads are much faster. All videos will be packaged in a single ZIP file.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-green-800 dark:text-green-400">
+                  <strong>💡 Download Times:</strong>
+                </p>
+                <ul className="text-sm text-green-800 dark:text-green-400 space-y-1 ml-4">
+                  <li>• Audio only: 30 seconds - 2 minutes</li>
+                  <li>• 360p-480p: 1-3 minutes</li>
+                  <li>• 720p-1080p: 2-5 minutes</li>
+                  <li>• 2K-4K: 5-10 minutes</li>
+                </ul>
+                <p className="text-sm text-green-800 dark:text-green-400 mt-2">
+                  <strong>Tip:</strong> Audio-only downloads are much faster if you only need the sound.
+                </p>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

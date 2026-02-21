@@ -4,7 +4,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000, // 60 seconds
+  timeout: 600000, // 10 minutes (for large video downloads)
   headers: {
     'Content-Type': 'application/json',
   },
@@ -25,6 +25,20 @@ export const analyzeVideo = async (url) => {
 };
 
 /**
+ * Analyze a playlist URL
+ * @param {string} url - Playlist URL to analyze
+ * @returns {Promise} Playlist metadata
+ */
+export const analyzePlaylist = async (url) => {
+  try {
+    const response = await api.post('/api/analyze-playlist', { url });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || { detail: 'Failed to analyze playlist' };
+  }
+};
+
+/**
  * Download a video
  * @param {string} url - Video URL
  * @param {string} formatId - Format ID to download
@@ -41,6 +55,26 @@ export const downloadVideo = async (url, formatId = null, audioOnly = false) => 
     return response.data;
   } catch (error) {
     throw error.response?.data || { detail: 'Failed to download video' };
+  }
+};
+
+/**
+ * Download multiple videos as a ZIP file
+ * @param {Array<string>} urls - Array of video URLs
+ * @param {string} formatId - Format ID to download
+ * @param {boolean} audioOnly - Download audio only
+ * @returns {Promise} Download information including ZIP file details
+ */
+export const downloadBatch = async (urls, formatId = null, audioOnly = false) => {
+  try {
+    const response = await api.post('/api/download-batch', {
+      urls,
+      format_id: formatId,
+      audio_only: audioOnly,
+    });
+    return response.data;
+  } catch (error) {
+    throw error.response?.data || { detail: 'Failed to download videos' };
   }
 };
 

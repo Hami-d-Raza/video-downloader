@@ -20,6 +20,7 @@ from downloader import VideoDownloader
 from utils import (
     validate_url,
     detect_platform,
+    is_playlist_url,
     cleanup_old_files,
     rate_limiter
 )
@@ -70,6 +71,12 @@ class DownloadRequest(BaseModel):
     quality: Optional[str] = "best"
     audio_only: bool = False
 
+class BatchDownloadRequest(BaseModel):
+    urls: List[str]
+    format_id: Optional[str] = None
+    quality: Optional[str] = "best"
+    audio_only: bool = False
+
 # Response models
 class FormatInfo(BaseModel):
     format_id: str
@@ -94,6 +101,30 @@ class DownloadResponse(BaseModel):
     message: str
     filename: Optional[str] = None
     download_url: Optional[str] = None
+
+class BatchDownloadResponse(BaseModel):
+    status: str
+    message: str
+    filename: Optional[str] = None  # ZIP filename
+    download_url: Optional[str] = None
+    total_videos: int
+    successful: int
+    failed: int
+
+class PlaylistVideoInfo(BaseModel):
+    id: str
+    title: str
+    url: str
+    duration: Optional[int] = None
+    duration_str: Optional[str] = None
+    thumbnail: Optional[str] = None
+
+class PlaylistResponse(BaseModel):
+    title: str
+    platform: str
+    video_count: int
+    videos: List[PlaylistVideoInfo]
+    uploader: Optional[str] = None
 
 
 @app.on_event("startup")
@@ -277,7 +308,6 @@ async def analyze_video(request: AnalyzeRequest):
         
         logger.info(f"Thumbnail URL for {platform}: {thumbnail_url[:100] if thumbnail_url else 'None'}")
         
-        
         return AnalyzeResponse(
             title=info.get('title', 'Unknown'),
             thumbnail=thumbnail_url or '',
@@ -294,6 +324,81 @@ async def analyze_video(request: AnalyzeRequest):
     except Exception as e:
         logger.error(f"Error analyzing video: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error analyzing video: {str(e)}")
+
+
+@app.post("/api/analyze-playlist", response_model=PlaylistResponse)
+async def analyze_playlist(request: AnalyzeRequest):
+    """
+    Analyze a YouTube playlist URL and return video list
+    
+    Args:
+        request: Contains the playlist URL
+        
+    Returns:
+        Playlist metadata including title and video entries
+    """
+    try:
+        # Rate limiting check
+        if not rate_limiter.check_rate_limit(request.url):
+            raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+        
+        # Validate URL
+        if not validate_url(request.url):
+            raise HTTPException(status_code=400, detail="Invalid URL format")
+        
+        # Check if it's a playlist URL
+        if not is_playlist_url(request.url):
+            raise HTTPException(status_code=400, detail="Not a valid playlist URL")
+        
+        # Detect platform
+        platform = detect_platform(request.url)
+        if platform != 'YouTube':
+            raise HTTPException(
+                status_code=400,
+                detail="Currently only YouTube playlists are supported."
+            )
+        
+        logger.info(f"Analyzing playlist: {request.url}")
+        
+        # Get playlist info
+        info = await downloader.get_playlist_info(request.url)
+        
+        if not info:
+            raise HTTPException(status_code=404, detail="Could not retrieve playlist information")
+        
+        # Extract video entries
+        videos = []
+        entries = info.get('entries', [])
+        
+        logger.info(f"Found {len(entries)} videos in playlist")
+        
+        for entry in entries:
+            if entry:
+                duration = entry.get('duration', 0) or 0
+                duration_str = f"{int(duration) // 60}:{int(duration) % 60:02d}" if duration else "Unknown"
+                
+                videos.append(PlaylistVideoInfo(
+                    id=entry.get('id', ''),
+                    title=entry.get('title', 'Unknown'),
+                    url=entry.get('url') or f"https://www.youtube.com/watch?v={entry.get('id')}",
+                    duration=int(duration) if duration else None,
+                    duration_str=duration_str,
+                    thumbnail=entry.get('thumbnail', '')
+                ))
+        
+        return PlaylistResponse(
+            title=info.get('title', 'Unknown Playlist'),
+            platform=platform,
+            video_count=len(videos),
+            videos=videos,
+            uploader=info.get('uploader')
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error analyzing playlist: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error analyzing playlist: {str(e)}")
 
 
 @app.post("/api/download", response_model=DownloadResponse)
@@ -367,6 +472,79 @@ async def download_video(request: DownloadRequest, background_tasks: BackgroundT
     except Exception as e:
         logger.error(f"Error downloading video: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error downloading video: {str(e)}")
+
+
+@app.post("/api/download-batch", response_model=BatchDownloadResponse)
+async def download_batch(request: BatchDownloadRequest, background_tasks: BackgroundTasks):
+    """
+    Download multiple videos and package them into a ZIP file
+    
+    Args:
+        request: Contains list of URLs, format_id, quality, and audio_only flag
+        background_tasks: FastAPI background tasks for cleanup
+        
+    Returns:
+        Download status, ZIP file information, and statistics
+    """
+    try:
+        # Validate all URLs
+        for url in request.urls:
+            if not validate_url(url):
+                raise HTTPException(status_code=400, detail=f"Invalid URL format: {url}")
+        
+        # Limit number of videos to prevent abuse
+        if len(request.urls) > 20:
+            raise HTTPException(status_code=400, detail="Maximum 20 videos per batch download")
+        
+        if len(request.urls) == 0:
+            raise HTTPException(status_code=400, detail="No URLs provided")
+        
+        logger.info(f"Starting batch download of {len(request.urls)} videos")
+        logger.info(f"Format: {request.format_id}, Audio only: {request.audio_only}")
+        
+        # Download all videos and create ZIP
+        result = await downloader.download_batch(
+            urls=request.urls,
+            format_id=request.format_id,
+            audio_only=request.audio_only
+        )
+        
+        if not result:
+            logger.error("Batch download returned None")
+            raise HTTPException(status_code=500, detail="Batch download failed. Please try again.")
+        
+        if 'filepath' not in result:
+            logger.error(f"Batch download result missing filepath: {result}")
+            raise HTTPException(status_code=500, detail="Batch download failed. ZIP file not created.")
+        
+        filepath = result['filepath']
+        
+        if not os.path.exists(filepath):
+            logger.error(f"ZIP file does not exist: {filepath}")
+            raise HTTPException(status_code=500, detail="Batch download failed. ZIP file not found.")
+        
+        filename = os.path.basename(filepath)
+        logger.info(f"Batch download successful: {filename}")
+        logger.info(f"Statistics - Total: {result['total']}, Successful: {result['successful']}, Failed: {result['failed']}")
+        
+        # Schedule ZIP file deletion after 1 hour
+        background_tasks.add_task(delete_file_after_delay, filepath, delay_hours=1)
+        
+        return BatchDownloadResponse(
+            status="success",
+            message=f"Downloaded {result['successful']} of {result['total']} videos successfully",
+            filename=filename,
+            download_url=f"/api/file/{filename}",
+            total_videos=result['total'],
+            successful=result['successful'],
+            failed=result['failed']
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in batch download: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error in batch download: {str(e)}")
 
 
 @app.get("/api/file/{filename}")

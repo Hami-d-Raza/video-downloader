@@ -59,6 +59,26 @@ def detect_platform(url: str) -> Optional[str]:
     return None
 
 
+def is_playlist_url(url: str) -> bool:
+    """
+    Check if URL is a playlist
+    
+    Args:
+        url: URL to check
+        
+    Returns:
+        True if URL is a playlist, False otherwise
+    """
+    url_lower = url.lower()
+    
+    # YouTube playlist patterns
+    if 'youtube.com' in url_lower or 'youtu.be' in url_lower:
+        return 'list=' in url_lower or '/playlist?' in url_lower
+    
+    # Other platforms don't commonly support playlists
+    return False
+
+
 def cleanup_old_files(directory: str, hours: float = 1) -> int:
     """
     Delete files older than specified hours

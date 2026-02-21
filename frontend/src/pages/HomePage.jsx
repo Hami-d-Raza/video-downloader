@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Youtube, Facebook, Instagram, Music2, Search, ArrowRight } from 'lucide-react';
-import { analyzeVideo } from '../api/client';
+import { analyzeVideo, analyzePlaylist } from '../api/client';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 
@@ -23,14 +23,29 @@ const HomePage = () => {
     setError('');
 
     try {
-      const data = await analyzeVideo(url);
+      // Check if URL is a playlist
+      const isPlaylist = url.includes('list=') || url.includes('/playlist?');
       
-      navigate('/results', { 
-        state: { 
-          videoData: data,
-          url: url 
-        } 
-      });
+      if (isPlaylist) {
+        // Analyze as playlist
+        const playlistData = await analyzePlaylist(url);
+        
+        navigate('/playlist', { 
+          state: { 
+            playlist: playlistData
+          } 
+        });
+      } else {
+        // Analyze as single video
+        const data = await analyzeVideo(url);
+        
+        navigate('/results', { 
+          state: { 
+            videoData: data,
+            url: url 
+          } 
+        });
+      }
     } catch (err) {
       setError(err.detail || 'Failed to analyze video. Please check the URL and try again.');
     } finally {
@@ -47,8 +62,9 @@ const HomePage = () => {
 
   const features = [
     { title: 'Multiple Formats', description: 'Choose from various video qualities', emoji: '🎬' },
+    { title: 'Playlist Support', description: 'Download YouTube playlists', emoji: '📺' },
+    { title: 'Fast Downloads', description: 'Quick and efficient processing', emoji: '⚡' },
     { title: 'Audio Only', description: 'Extract audio as MP3', emoji: '🎵' },
-    { title: 'Fast & Free', description: 'Quick downloads at no cost', emoji: '⚡' },
   ];
 
   return (
@@ -60,7 +76,7 @@ const HomePage = () => {
             Download Videos Instantly
           </h2>
           <p className="text-lg text-gray-600 dark:text-gray-400">
-            Save videos from YouTube, Facebook, Instagram, and TikTok in high quality
+            Save videos and playlists from YouTube, Facebook, Instagram, and TikTok
           </p>
         </div>
 
@@ -69,7 +85,7 @@ const HomePage = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="url" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Video URL
+                Video or Playlist URL
               </label>
               <div className="relative">
                 <input
@@ -136,7 +152,7 @@ const HomePage = () => {
         </div>
 
         {/* Features */}
-        <div className="grid md:grid-cols-3 gap-4">
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
           {features.map((feature, index) => (
             <div key={index} className="card p-5 text-center hover:border-gray-300 dark:hover:border-emerald-700 transition-colors">
               <div className="text-3xl mb-3">{feature.emoji}</div>
