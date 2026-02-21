@@ -50,12 +50,12 @@ for dev_origin in development_origins:
     if dev_origin not in allowed_origins:
         allowed_origins.append(dev_origin)
 
-# For Railway deployments, allow Railway domains
-if os.getenv("RAILWAY_ENVIRONMENT"):
-    # Allow all Railway.app domains in Railway environment
-    allow_origin_regex = r"https://.*\.up\.railway\.app"
-else:
-    allow_origin_regex = None
+# For Railway/production deployments, allow common hosting platforms
+# This supports Vercel, Netlify, Railway, and other platforms
+allow_origin_regex = None
+if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_ENVIRONMENT_NAME"):
+    # Allow Railway and Vercel domains
+    allow_origin_regex = r"https://.*\.(vercel\.app|up\.railway\.app|netlify\.app)$"
 
 app.add_middleware(
     CORSMiddleware,
