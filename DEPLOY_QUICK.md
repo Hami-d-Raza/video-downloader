@@ -36,10 +36,17 @@ Your app is now live on Railway.
 
 ## Common Issues & Fixes
 
-### ❌ "There was an error deploying from source"
+### ❌ "There was an error deploying from source" or "Script start.sh not found"
 **Fix**: Make sure you set the **Root Directory** correctly:
 - Backend service: `backend`
 - Frontend service: `frontend`
+
+Also ensure you've pushed all the configuration files:
+```bash
+git add .
+git commit -m "Add Railway config files"
+git push origin main
+```
 
 ### ❌ Build fails with "No package.json" or "No requirements.txt"  
 **Fix**: Verify the Root Directory is set correctly in service settings
