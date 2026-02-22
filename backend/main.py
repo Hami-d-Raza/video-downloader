@@ -206,10 +206,26 @@ async def analyze_video(request: AnalyzeRequest):
         logger.info(f"Analyzing {platform} video: {request.url}")
         
         # Get video info
-        info = await downloader.get_video_info(request.url)
-        
-        if not info:
-            raise HTTPException(status_code=404, detail="Could not retrieve video information")
+        try:
+            info = await downloader.get_video_info(request.url)
+            
+            if not info:
+                raise HTTPException(status_code=404, detail="Could not retrieve video information")
+        except HTTPException:
+            raise
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Failed to analyze video: {error_msg}")
+            # Provide more helpful error message
+            if "No supported JavaScript runtime" in error_msg or "JS" in error_msg:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Video extraction requires Node.js runtime. Please contact the administrator."
+                )
+            raise HTTPException(
+                status_code=500,
+                detail=f"Could not retrieve video information: {error_msg[:200]}"
+            )
         
         logger.info(f"Successfully retrieved info for {platform}: {info.get('title', 'Unknown')[:50]}")
         logger.info(f"Available metadata fields: {list(info.keys())[:20]}")

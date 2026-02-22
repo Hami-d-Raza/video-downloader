@@ -34,34 +34,18 @@ class VideoDownloader:
             'restrictfilenames': True,  # Restrict filenames to ASCII
             'no_warnings': False,
             'ignoreerrors': False,
-            'extract_flat': False,
             'quiet': False,
             'no_color': True,
-            # Cookie and authentication options
-            'cookiefile': None,
-            'username': None,
-            'password': None,
             # Instagram-specific extractor arguments
             'extractor_args': {
                 'instagram': {
                     'include_ondemand_in_playlists': ['true'],
                     'api': ['mobile']  # Use mobile API which is more stable
+                },
+                'youtube': {
+                   'player_client': ['android', 'web'],  # Use Android client to bypass restrictions
+                    'player_skip': ['webpage'],  # Skip webpage parsing
                 }
-            },
-            # Add headers to avoid blocking (especially for Instagram)
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
-                'Sec-Fetch-User': '?1',
-                'Upgrade-Insecure-Requests': '1',
-                'sec-ch-ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
-                'sec-ch-ua-mobile': '?0',
-                'sec-ch-ua-platform': '"Windows"',
             },
         }
     
@@ -107,8 +91,9 @@ class VideoDownloader:
             return info
         
         except Exception as e:
-            logger.error(f"Error getting video info: {e}")
-            return None
+            logger.error(f"Error getting video info for {url}: {str(e)}", exc_info=True)
+            # Re-raise the exception instead of returning None so we can see the actual error
+            raise
     
     def _extract_info(self, url: str, ydl_opts: dict) -> Optional[Dict[str, Any]]:
         """
