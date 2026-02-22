@@ -369,6 +369,7 @@ class VideoDownloader:
         try:
             downloaded_files = []
             failed_count = 0
+            failed_urls = []
             
             logger.info(f"Starting batch download of {len(urls)} videos")
             
@@ -386,16 +387,25 @@ class VideoDownloader:
                         else:
                             logger.error(f"File not found after download: {filepath}")
                             failed_count += 1
+                            failed_urls.append(url)
                     else:
-                        logger.error(f"Failed to download video {idx}/{len(urls)}")
+                        logger.error(f"Failed to download video {idx}/{len(urls)}: No result returned")
                         failed_count += 1
+                        failed_urls.append(url)
                         
                 except Exception as e:
-                    logger.error(f"Error downloading video {idx}/{len(urls)}: {e}")
+                    logger.error(f"Error downloading video {idx}/{len(urls)} ({url}): {e}", exc_info=True)
                     failed_count += 1
+                    failed_urls.append(url)
+            
+            # Log failures
+            if failed_urls:
+                logger.warning(f"Failed to download {len(failed_urls)} videos:")
+                for failed_url in failed_urls:
+                    logger.warning(f"  - {failed_url}")
             
             if not downloaded_files:
-                logger.error("No videos were successfully downloaded")
+                logger.error("No videos were successfully downloaded in batch")
                 return None
             
             # Create ZIP file
@@ -403,7 +413,7 @@ class VideoDownloader:
             zip_filename = f"videos_batch_{timestamp}.zip"
             zip_filepath = os.path.join(self.download_dir, zip_filename)
             
-            logger.info(f"Creating ZIP file: {zip_filename}")
+            logger.info(f"Creating ZIP file with {len(downloaded_files)} videos: {zip_filename}")
             
             with zipfile.ZipFile(zip_filepath, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 for filepath in downloaded_files:
@@ -420,6 +430,7 @@ class VideoDownloader:
                         logger.warning(f"Failed to delete original file {filepath}: {e}")
             
             logger.info(f"Batch download complete. ZIP created: {zip_filename}")
+            logger.info(f"Final stats - Total: {len(urls)}, Successful: {len(downloaded_files)}, Failed: {failed_count}")
             
             return {
                 'filepath': zip_filepath,

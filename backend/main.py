@@ -575,8 +575,11 @@ async def download_batch(request: BatchDownloadRequest, background_tasks: Backgr
         )
         
         if not result:
-            logger.error("Batch download returned None")
-            raise HTTPException(status_code=500, detail="Batch download failed. Please try again.")
+            logger.error("Batch download returned None - all downloads may have failed")
+            raise HTTPException(
+                status_code=500, 
+                detail="Batch download failed. All videos failed to download. Please check the URLs and try again."
+            )
         
         if 'filepath' not in result:
             logger.error(f"Batch download result missing filepath: {result}")
@@ -589,20 +592,32 @@ async def download_batch(request: BatchDownloadRequest, background_tasks: Backgr
             raise HTTPException(status_code=500, detail="Batch download failed. ZIP file not found.")
         
         filename = os.path.basename(filepath)
+        successful = result.get('successful', 0)
+        failed = result.get('failed', 0)
+        total = result.get('total', 0)
+        
         logger.info(f"Batch download successful: {filename}")
-        logger.info(f"Statistics - Total: {result['total']}, Successful: {result['successful']}, Failed: {result['failed']}")
+        logger.info(f"Statistics - Total: {total}, Successful: {successful}, Failed: {failed}")
+        
+        # Create appropriate message based on results
+        if failed == 0:
+            message = f"Successfully downloaded all {successful} videos"
+        elif successful > 0:
+            message = f"Downloaded {successful} of {total} videos successfully ({failed} failed)"
+        else:
+            message = f"Warning: All {total} downloads failed"
         
         # Schedule ZIP file deletion after 1 hour
         background_tasks.add_task(delete_file_after_delay, filepath, delay_hours=1)
         
         return BatchDownloadResponse(
             status="success",
-            message=f"Downloaded {result['successful']} of {result['total']} videos successfully",
+            message=message,
             filename=filename,
             download_url=f"/api/file/{filename}",
-            total_videos=result['total'],
-            successful=result['successful'],
-            failed=result['failed']
+            total_videos=total,
+            successful=successful,
+            failed=failed
         )
     
     except HTTPException:
