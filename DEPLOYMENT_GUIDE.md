@@ -172,7 +172,25 @@ Press `F12` to open Developer Tools:
 
 **Fix**: Same as Issue 1 above
 
-### Issue 3: White Screen / Blank Page
+### Issue 3: ESLint Dependency Conflict
+
+**Symptom**: Build fails with error like:
+```
+Could not resolve dependency:
+peer eslint@"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7" from eslint-plugin-react
+```
+
+**Cause**: ESLint version incompatibility with plugins
+
+**Fix**: This has already been fixed in the latest commit. If you still see this:
+
+1. Pull the latest code: `git pull origin main`
+2. Clear Vercel build cache and redeploy
+3. The package.json now uses ESLint 8.57 (stable and compatible)
+
+**Note**: This issue is automatically resolved in the current version.
+
+### Issue 4: White Screen / Blank Page
 
 **Symptom**: Deployment succeeds but shows blank page
 
@@ -186,7 +204,7 @@ Press `F12` to open Developer Tools:
    - Deployments → ⋯ → Redeploy
    - Uncheck "Use existing Build Cache"
 
-### Issue 4: "Network Error" When Analyzing Videos
+### Issue 5: "Network Error" When Analyzing Videos
 
 **Symptom**: Can see the page, but analyzing videos fails
 
@@ -207,7 +225,7 @@ Press `F12` to open Developer Tools:
    - Look for CORS errors
    - Verify API URL is correct
 
-### Issue 5: CORS Errors in Browser
+### Issue 6: CORS Errors in Browser
 
 **Symptom**: Errors like "blocked by CORS policy" in console
 
