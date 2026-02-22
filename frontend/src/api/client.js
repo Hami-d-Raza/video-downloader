@@ -94,7 +94,9 @@ export const downloadBatch = async (urls, formatId = null, audioOnly = false) =>
  * @returns {string} Download URL
  */
 export const getFileUrl = (filename) => {
-  return `${API_BASE_URL}/api/file/${filename}`;
+  // Ensure no double slashes in URL
+  const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL.slice(0, -1) : API_BASE_URL;
+  return `${baseUrl}/api/file/${filename}`;
 };
 
 /**
