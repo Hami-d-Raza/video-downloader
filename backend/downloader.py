@@ -44,15 +44,24 @@ class VideoDownloader:
             # Instagram-specific extractor arguments
             'extractor_args': {
                 'instagram': {
-                    'include_ondemand_in_playlists': ['true']
+                    'include_ondemand_in_playlists': ['true'],
+                    'api': ['mobile']  # Use mobile API which is more stable
                 }
             },
             # Add headers to avoid blocking (especially for Instagram)
             'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-us,en;q=0.5',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Sec-Fetch-Dest': 'document',
                 'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'Upgrade-Insecure-Requests': '1',
+                'sec-ch-ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"',
             },
         }
     
@@ -139,8 +148,29 @@ class VideoDownloader:
         """
         try:
             ydl_opts = self.base_opts.copy()
+            is_instagram = 'instagram.com' in url.lower()
             
-            if audio_only:
+            # Instagram-specific handling
+            if is_instagram and not audio_only:
+                # Instagram quality selection
+                if format_id and format_id != 'best':
+                    # User selected a specific quality for Instagram
+                    height = format_id.replace('p', '')
+                    try:
+                        height_int = int(height)
+                        # Instagram format selection: try to get exact height or closest match
+                        # Instagram typically provides fewer format options than YouTube
+                        ydl_opts['format'] = f'bestvideo[height<={height_int}]+bestaudio/best[height<={height_int}]/best'
+                        logger.info(f"Instagram quality selection: {format_id} (format selector: {ydl_opts['format']})")
+                    except ValueError:
+                        # Invalid format_id, fall back to best
+                        ydl_opts['format'] = 'best'
+                        logger.warning(f"Invalid format_id '{format_id}' for Instagram, using 'best'")
+                else:
+                    # No specific quality requested, use best available
+                    ydl_opts['format'] = 'best'
+                    logger.info("Using Instagram default (best) quality")
+            elif audio_only:
                 # Audio only - extract and convert to MP3
                 ydl_opts.update({
                     'format': 'bestaudio/best',
@@ -151,8 +181,9 @@ class VideoDownloader:
                     }],
                     'outtmpl': os.path.join(self.download_dir, '%(title)s_%(id)s.%(ext)s'),
                 })
-            elif format_id and format_id != 'best':
+            elif format_id and format_id != 'best' and not is_instagram:
                 # Specific quality requested - always merge video + audio
+                # Note: Instagram uses simpler format selection, skip this for Instagram
                 # Extract height from format_id (e.g., "1080p" -> 1080)
                 height = format_id.replace('p', '')
                 
@@ -181,8 +212,8 @@ class VideoDownloader:
                 }]
                 
                 logger.info(f"Format selector for {height}p: {ydl_opts['format']}")
-            else:
-                # Best quality video + audio
+            elif not is_instagram:
+                # Best quality video + audio (skip for Instagram, already set)
                 ydl_opts['format'] = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best'
                 ydl_opts['merge_output_format'] = 'mp4'
                 ydl_opts['postprocessors'] = [{

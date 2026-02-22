@@ -254,13 +254,15 @@ async def analyze_video(request: AnalyzeRequest):
                 # Use range matching for flexibility
                 if quality['min'] <= height <= quality['max']:
                     if quality['id'] not in matched_qualities:
+                        # Instagram-specific note
+                        format_note = "Video + Audio" if platform != "Instagram" else "Instagram Video"
                         formats.append(FormatInfo(
                             format_id=quality['id'],
                             quality=quality['label'],
                             ext="mp4",
                             filesize=None,
                             filesize_str="Varies by quality",
-                            format_note="Video + Audio"
+                            format_note=format_note
                         ))
                         matched_qualities.add(quality['id'])
                     break
