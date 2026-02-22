@@ -281,6 +281,31 @@ peer eslint@"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7" from eslint-plugin-react
 - Updated health check endpoint to verify FFmpeg installation
 - FFmpeg is required for merging video+audio, format conversion, and MP3 extraction
 
+### Issue 8: YouTube 403 Forbidden Error
+
+**Symptom**: Analysis works, but download fails with "HTTP Error 403: Forbidden"
+
+**Cause**: Outdated yt-dlp version - YouTube blocks old versions
+
+**Fix**: This has been fixed in the latest code (yt-dlp always updates to latest):
+
+1. **Pull latest code**:
+   ```bash
+   git pull origin main
+   ```
+
+2. **Railway auto-redeploys** with latest yt-dlp
+
+3. **Test download** - should work now!
+
+**What was fixed**:
+- Removed yt-dlp version pin (was stuck at 2023.10.7)
+- Now installs latest yt-dlp on every deployment
+- Updated Python from 3.9 → 3.11 (yt-dlp requirement)
+- YouTube frequently changes their API, so latest yt-dlp is essential
+
+**Prevention**: The latest code always installs the newest yt-dlp version automatically.
+
 ---
 
 ## 🔄 Updating Your Deployment
