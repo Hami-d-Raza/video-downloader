@@ -157,6 +157,26 @@ async def root():
     }
 
 
+@app.get("/health")
+async def health_check():
+    """
+    Detailed health check with dependency verification
+    """
+    import shutil
+    
+    # Check if FFmpeg is available
+    ffmpeg_available = shutil.which("ffmpeg") is not None
+    ffprobe_available = shutil.which("ffprobe") is not None
+    
+    return {
+        "status": "healthy",
+        "ffmpeg_installed": ffmpeg_available,
+        "ffprobe_installed": ffprobe_available,
+        "download_dir_exists": os.path.exists(DOWNLOAD_DIR),
+        "timestamp": datetime.now().isoformat()
+    }
+
+
 @app.post("/api/analyze", response_model=AnalyzeResponse)
 async def analyze_video(request: AnalyzeRequest):
     """
