@@ -50,20 +50,18 @@ for dev_origin in development_origins:
     if dev_origin not in allowed_origins:
         allowed_origins.append(dev_origin)
 
-# For Railway/production deployments, allow common hosting platforms
-# This supports Vercel, Netlify, Railway, and other platforms
-allow_origin_regex = None
-if os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("RAILWAY_ENVIRONMENT_NAME"):
-    # Allow Railway and Vercel domains
-    allow_origin_regex = r"https://.*\.(vercel\.app|up\.railway\.app|netlify\.app)$"
+# Always allow Vercel, Netlify, and Railway domains in production
+# This regex will match any subdomain on these platforms
+allow_origin_regex = r"https://.*\.(vercel\.app|up\.railway\.app|netlify\.app)$"
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 # Create downloads directory
