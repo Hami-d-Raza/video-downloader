@@ -106,7 +106,19 @@ Still in the "Configure Project" screen:
 
 Now that you have your Vercel URL, update the backend:
 
-### Step 1: Add Frontend URL to Railway
+### Step 1: Verify Backend is Working
+
+1. **Check backend health**:
+   - Visit: `https://video-downloader-production-e4fe.up.railway.app/health`
+   - Should return JSON with `ffmpeg_installed: true`
+   - If FFmpeg shows as `false`, the backend needs to redeploy with latest code
+
+2. **If FFmpeg is not installed**:
+   - Pull latest code: `git pull origin main`
+   - Railway will auto-redeploy with FFmpeg
+   - Check `/health` again after ~2 minutes
+
+### Step 2: Add Frontend URL to Railway
 
 1. Go to [railway.app/dashboard](https://railway.app/dashboard)
 2. Open your backend service
@@ -240,6 +252,34 @@ peer eslint@"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7" from eslint-plugin-react
 2. **Verify backend CORS config**:
    - Backend already supports `*.vercel.app` domains
    - Should work automatically
+
+### Issue 7: 500 Error When Downloading Videos
+
+**Symptom**: Analyze works, but download fails with 500 error
+
+**Cause**: FFmpeg not installed on Railway (required for video processing)
+
+**Fix**: This has been fixed in the latest code. To apply:
+
+1. **Pull latest code**:
+   ```bash
+   git pull origin main
+   ```
+
+2. **Railway auto-redeploys** with FFmpeg configured via `nixpacks.toml`
+
+3. **Verify FFmpeg is installed**:
+   - Visit: `https://video-downloader-production-e4fe.up.railway.app/health`
+   - Check: `"ffmpeg_installed": true`
+
+4. **If still false after 2 minutes**:
+   - Go to Railway → Backend Service → Settings
+   - Click "Redeploy" to force rebuild
+
+**What was fixed**:
+- Added `backend/nixpacks.toml` to install FFmpeg via Nix packages
+- Updated health check endpoint to verify FFmpeg installation
+- FFmpeg is required for merging video+audio, format conversion, and MP3 extraction
 
 ---
 
