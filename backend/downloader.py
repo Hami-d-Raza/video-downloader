@@ -36,15 +36,20 @@ class VideoDownloader:
             'ignoreerrors': False,
             'quiet': False,
             'no_color': True,
-            # Instagram-specific extractor arguments
+            # Don't use cookies from browser - causes permission issues if browser is open 
+            # Extractor-specific arguments
             'extractor_args': {
                 'instagram': {
-                    'include_ondemand_in_playlists': ['true'],
-                    'api': ['mobile']  # Use mobile API which is more stable
+                    # Use multiple methods to bypass restrictions
+                    'api': ['graphql', 'web'],  # Try GraphQL and Web API
                 },
                 'youtube': {
-                   'player_client': ['android', 'web'],  # Use Android client to bypass restrictions
-                    'player_skip': ['webpage'],  # Skip webpage parsing
+                    'player_client': ['ios', 'android'],  # Use mobile clients which work better
+                    'player_skip': ['webpage', 'configs'],  # Skip unnecessary parsing
+                    'skip': ['hls', 'dash'],  # Skip adaptive formats that need PO tokens
+                },
+                'tiktok': {
+                    'api_hostname': ['api22-normal-c-useast2a.tiktokv.com', 'api-h2.tiktokv.com'],
                 }
             },
         }
@@ -110,6 +115,40 @@ class VideoDownloader:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
                 return info
+        except yt_dlp.utils.DownloadError as e:
+            error_msg = str(e)
+            # Try fallback for Instagram without cookies
+            if 'Instagram' in error_msg and 'empty media response' in error_msg:
+                logger.warning("Instagram requires authentication, trying without cookies...")
+                # Try again without cookies
+                fallback_opts = ydl_opts.copy()
+                fallback_opts.pop('cookiesfrombrowser', None)
+                try:
+                    with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                        return info
+                except:
+                    logger.error("Instagram extraction failed even without cookies")
+                    raise
+            elif 'YouTube' in error_msg:
+                logger.warning("YouTube extraction issue, trying with different client...")
+                # YouTube fallback - try with minimal options
+                fallback_opts = ydl_opts.copy()
+                fallback_opts['extractor_args'] = {
+                    'youtube': {
+                        'player_client': ['ios'],
+                        'skip': ['hls', 'dash', 'translated_subs'],
+                    }
+                }
+                try:
+                    with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                        return info
+                except:
+                    logger.error("YouTube extraction failed with fallback")
+                    raise
+            logger.error(f"yt-dlp extraction error: {e}")
+            raise
         except Exception as e:
             logger.error(f"yt-dlp extraction error: {e}")
             raise
@@ -240,82 +279,111 @@ class VideoDownloader:
         try:
             import time
             
+            # Try downloading with error handling for different platforms
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+            except yt_dlp.utils.DownloadError as e:
+                error_msg = str(e)
+                # Instagram fallback
+                if 'Instagram' in error_msg and 'cookiesfrombrowser' in ydl_opts:
+                    logger.warning("Retrying Instagram download without cookies...")
+                    fallback_opts = ydl_opts.copy()
+                    fallback_opts.pop('cookiesfrombrowser', None)
+                    with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+                        info = ydl.extract_info(url, download=True)
+                # YouTube fallback
+                elif 'YouTube' in error_msg or 'youtube' in error_msg:
+                    logger.warning("Retrying YouTube download with iOS client...")
+                    fallback_opts = ydl_opts.copy()
+                    fallback_opts['extractor_args'] = {
+                        'youtube': {
+                            'player_client': ['ios'],
+                        }
+                    }
+                    with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+                        info = ydl.extract_info(url, download=True)
+                else:
+                    raise
+            
+            # Get the expected filename (this must run AFTER the download, regardless of error handling)
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                
-                # Get the expected filename
                 filename = ydl.prepare_filename(info)
-                base_path, _ = os.path.splitext(filename)
-                
-                # Wait a moment for post-processing to complete
-                time.sleep(1)
-                
-                # Determine actual filepath after post-processing
-                filepath = None
-                
-                # Check for post-processed files
-                if ydl_opts.get('postprocessors'):
-                    for pp in ydl_opts['postprocessors']:
-                        if pp.get('key') == 'FFmpegExtractAudio':
-                            # Audio extraction - check for mp3
-                            mp3_path = f"{base_path}.mp3"
-                            if os.path.exists(mp3_path):
-                                filepath = mp3_path
-                                break
-                        elif pp.get('key') == 'FFmpegVideoConvertor':
-                            # Video conversion - check for mp4
-                            mp4_path = f"{base_path}.mp4"
-                            if os.path.exists(mp4_path):
-                                filepath = mp4_path
-                                break
-                
-                # If not found via post-processors, try the original filename
-                if not filepath and os.path.exists(filename):
-                    filepath = filename
-                
-                # Last resort: check for common extensions in the directory
-                if not filepath:
-                    for ext in ['.mp4', '.mp3', '.webm', '.mkv', '.m4a']:
-                        try_path = base_path + ext
-                        if os.path.exists(try_path):
-                            filepath = try_path
+            base_path, ext = os.path.splitext(filename)
+            
+            # Wait a moment for post-processing to complete
+            time.sleep(1)
+            
+            # Determine actual filepath after post-processing
+            filepath = None
+            
+            # First check: does the original filename exist?
+            if os.path.exists(filename):
+                filepath = filename
+                logger.info(f"Found file at original path: {filepath}")
+            
+            # Second check: postprocessor might have changed extension
+            if not filepath and ydl_opts.get('postprocessors'):
+                for pp in ydl_opts['postprocessors']:
+                    if pp.get('key') == 'FFmpegExtractAudio':
+                        # Audio extraction - check for mp3
+                        mp3_path = f"{base_path}.mp3"
+                        if os.path.exists(mp3_path):
+                            filepath = mp3_path
+                            logger.info(f"Found audio file: {filepath}")
                             break
-                
-                # Final check: look for the most recent file in downloads directory
-                if not filepath:
-                    download_dir = os.path.dirname(filename)
-                    if os.path.exists(download_dir):
-                        files = [
-                            os.path.join(download_dir, f) 
-                            for f in os.listdir(download_dir) 
-                            if os.path.isfile(os.path.join(download_dir, f))
-                        ]
-                        if files:
-                            # Get most recently modified file
-                            most_recent = max(files, key=os.path.getmtime)
-                            # Check if it was created in the last 120 seconds
-                            if time.time() - os.path.getmtime(most_recent) < 120:
-                                filepath = most_recent
-                                logger.info(f"Found recent file: {filepath}")
-                
-                if not filepath or not os.path.exists(filepath):
-                    logger.error(f"Downloaded file not found. Expected: {filename}")
-                    logger.error(f"Checked paths: {base_path}.mp4, {base_path}.mp3, etc.")
-                    # List actual files in directory for debugging
-                    download_dir = os.path.dirname(filename)
-                    if os.path.exists(download_dir):
-                        actual_files = os.listdir(download_dir)
-                        logger.error(f"Files in directory: {actual_files}")
-                    return None
-                
-                logger.info(f"Successfully located file: {filepath}")
-                
-                return {
-                    'filepath': filepath,
-                    'title': info.get('title', 'Unknown'),
-                    'duration': info.get('duration', 0),
-                    'filesize': os.path.getsize(filepath) if os.path.exists(filepath) else 0
-                }
+                    elif pp.get('key') == 'FFmpegVideoConvertor':
+                        # Video conversion - check for mp4
+                        mp4_path = f"{base_path}.mp4"
+                        if os.path.exists(mp4_path):
+                            filepath = mp4_path
+                            logger.info(f"Found converted video: {filepath}")
+                            break
+            
+            # Third check: try common extensions
+            if not filepath:
+                for try_ext in ['.mp4', '.webm', '.mkv', '.m4a', '.mp3']:
+                    try_path = base_path + try_ext
+                    if os.path.exists(try_path):
+                        filepath = try_path
+                        logger.info(f"Found file with extension {try_ext}: {filepath}")
+                        break
+            
+            # Final check: look for the most recent file in downloads directory
+            if not filepath:
+                download_dir = os.path.dirname(filename)
+                if os.path.exists(download_dir):
+                    files = [
+                        os.path.join(download_dir, f) 
+                        for f in os.listdir(download_dir) 
+                        if os.path.isfile(os.path.join(download_dir, f))
+                    ]
+                    if files:
+                        # Get most recently modified file
+                        most_recent = max(files, key=os.path.getmtime)
+                        # Check if it was created in the last 120 seconds
+                        if time.time() - os.path.getmtime(most_recent) < 120:
+                            filepath = most_recent
+                            logger.info(f"Found recent file: {filepath}")
+            
+            if not filepath or not os.path.exists(filepath):
+                logger.error(f"Downloaded file not found. Expected: {filename}")
+                logger.error(f"Checked paths: {base_path}.mp4, {base_path}.mp3, etc.")
+                # List actual files in directory for debugging
+                download_dir = os.path.dirname(filename)
+                if os.path.exists(download_dir):
+                    actual_files = os.listdir(download_dir)
+                    logger.error(f"Files in directory: {actual_files}")
+                return None
+            
+            logger.info(f"Successfully located file: {filepath}")
+            
+            return {
+                'filepath': filepath,
+                'title': info.get('title', 'Unknown'),
+                'duration': info.get('duration', 0),
+                'filesize': os.path.getsize(filepath) if os.path.exists(filepath) else 0
+            }
         
         except Exception as e:
             logger.error(f"yt-dlp download error: {e}")

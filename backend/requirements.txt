@@ -3,10 +3,9 @@ fastapi==0.109.0
 uvicorn[standard]==0.27.0
 python-multipart==0.0.6
 
-# Video downloading - pinned to stable version
-# Version 2026.02.21 has issues requiring Node.js runtime
-# Using 2024.12.13 for stability
-yt-dlp==2024.12.13
+# Video downloading - using latest stable version
+# Updated to fix Instagram and TikTok extraction issues
+yt-dlp>=2024.12.13
 
 # Data validation
 pydantic==2.5.3
