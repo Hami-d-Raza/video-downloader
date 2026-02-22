@@ -6,6 +6,20 @@ A production-ready web application for downloading videos from YouTube, Facebook
 ![Python](https://img.shields.io/badge/python-3.8+-blue)
 ![React](https://img.shields.io/badge/react-18-blue)
 ![FastAPI](https://img.shields.io/badge/fastapi-0.109-green)
+![Production Ready](https://img.shields.io/badge/production-ready-brightgreen)
+
+## 🌟 Live Demo
+
+- **Frontend**: https://video-downloader-jade.vercel.app
+- **Backend API**: https://video-downloader-production-e4fe.up.railway.app
+
+## 📖 Quick Links
+
+- **[🚀 Deployment Guide](DEPLOYMENT_GUIDE.md)** - Complete guide to deploy to Vercel
+- **[✅ Production Checklist](PRODUCTION_CHECKLIST.md)** - Production readiness checklist
+- **[📚 API Documentation](https://video-downloader-production-e4fe.up.railway.app/docs)** - Interactive API docs
+
+---
 
 ## ⚠️ Important Disclaimer
 
@@ -149,40 +163,42 @@ Frontend runs at: **http://localhost:5173**
 ## 📁 Project Structure
 
 ```
-Video Downloader/
-├── backend/
-│   ├── main.py              # FastAPI application
-│   ├── downloader.py        # Video downloader module
-│   ├── utils.py             # Utility functions
-│   ├── requirements.txt     # Python dependencies
-│   ├── .env.example         # Environment template
-│   ├── .gitignore
-│   └── README.md
+video-downloader/
+├── backend/               # FastAPI backend (Railway)
+│   ├── main.py           # FastAPI application
+│   ├── downloader.py     # Video downloader module
+│   ├── utils.py          # Utility functions
+│   ├── requirements.txt  # Python dependencies
+│   ├── railway.json      # Railway configuration
+│   └── .env.example
 │
-├── frontend/
+├── frontend/             # React frontend (Vercel)
 │   ├── src/
 │   │   ├── api/
-│   │   │   └── client.js    # API client
+│   │   │   └── client.js     # API client
 │   │   ├── components/
 │   │   │   ├── Header.jsx
 │   │   │   ├── Footer.jsx
 │   │   │   ├── LoadingSpinner.jsx
 │   │   │   └── ErrorMessage.jsx
+│   │   ├── context/
+│   │   │   └── ThemeContext.jsx
 │   │   ├── pages/
 │   │   │   ├── HomePage.jsx
-│   │   │   └── ResultsPage.jsx
+│   │   │   ├── ResultsPage.jsx
+│   │   │   └── PlaylistPage.jsx
 │   │   ├── App.jsx
-│   │   ├── main.jsx
-│   │   └── index.css
+│   │   └── main.jsx
 │   ├── index.html
 │   ├── package.json
 │   ├── vite.config.js
-│   ├── tailwind.config.js
-│   ├── .env.example
-│   ├── .gitignore
-│   └── README.md
+│   ├── vercel.json       # Vercel configuration
+│   ├── .vercelignore     # Vercel ignore file
+│   └── .env.example
 │
-└── README.md                # This file
+├── DEPLOYMENT_GUIDE.md   # 📖 Complete deployment guide
+├── PRODUCTION_CHECKLIST.md
+└── README.md             # This file
 ```
 
 ---
@@ -271,6 +287,39 @@ VITE_API_URL=http://localhost:8000
 
 ---
 
+## 🚀 Production Deployment
+
+### Deploy to Vercel + Railway
+
+This project is production-ready and optimized for deployment!
+
+**📖 Complete Deployment Guide**: See [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md)
+
+**Quick Overview:**
+1. **Backend**: Already deployed on Railway
+   - URL: `https://video-downloader-production-e4fe.up.railway.app`
+   
+2. **Frontend**: Deploy to Vercel
+   - Set Root Directory to `frontend`
+   - Add environment variable: `VITE_API_URL`
+   - One-click deploy from GitHub
+
+**Production Checklist**: See [PRODUCTION_CHECKLIST.md](PRODUCTION_CHECKLIST.md)
+
+### Environment Variables
+
+**Vercel (Frontend)**:
+```env
+VITE_API_URL=https://video-downloader-production-e4fe.up.railway.app
+```
+
+**Railway (Backend)**:
+```env
+FRONTEND_URL=https://your-vercel-url.vercel.app
+```
+
+---
+
 ## 🏗️ Building for Production
 
 ### Backend
@@ -286,11 +335,32 @@ cd frontend
 npm run build
 ```
 
-Deploy the `dist/` folder to:
-- Vercel
-- Netlify
-- AWS S3 + CloudFront
-- Any static hosting service
+Build outputs to `dist/` folder (optimized and minified).
+
+**Build Features**:
+- Code splitting and lazy loading
+- Minification and compression
+- Source map removal for production
+- Optimized chunk sizes
+
+---
+
+## 📦 Production Optimizations
+
+### Frontend
+- ✅ Vite production build with code splitting
+- ✅ React vendor chunks separated
+- ✅ Environment variable validation
+- ✅ SEO meta tags optimized
+- ✅ .vercelignore configured
+- ✅ Bundle size optimized (< 500KB)
+
+### Backend
+- ✅ CORS configured for production domains
+- ✅ Rate limiting enabled
+- ✅ Auto file cleanup
+- ✅ Health check endpoint
+- ✅ Comprehensive logging
 
 ---
 

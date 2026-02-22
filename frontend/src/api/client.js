@@ -2,6 +2,16 @@ import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://video-downloader-production-e4fe.up.railway.app';
 
+// Log API URL in development mode
+if (import.meta.env.DEV) {
+  console.log('🔗 API Base URL:', API_BASE_URL);
+}
+
+// Validate that we have an API URL
+if (!API_BASE_URL) {
+  console.error('❌ VITE_API_URL is not defined! API calls will fail.');
+}
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 600000, // 10 minutes (for large video downloads)
