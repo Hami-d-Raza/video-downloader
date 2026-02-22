@@ -101,6 +101,15 @@ POST /api/download
 
 ## Troubleshooting
 
+### No Thumbnails Showing
+- **CORS Issue**: Instagram thumbnails may be blocked by CORS policies
+  - The browser console will show CORS errors
+  - Thumbnails load from Instagram's CDN which may block cross-origin requests
+  - This is a browser security feature and is expected behavior
+  - The placeholder "No preview" image will show instead
+- **Private Content**: Private accounts don't provide thumbnail URLs
+- **Network Issues**: Check internet connection and Instagram availability
+
 ### No Quality Options Shown
 - Video might be a photo post (no video)
 - Private account (requires authentication)

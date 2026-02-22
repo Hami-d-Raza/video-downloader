@@ -302,43 +302,60 @@ async def analyze_video(request: AnalyzeRequest):
         # Extract thumbnail URL with fallbacks
         thumbnail_url = ''
         
-        # Try different methods to get thumbnail
-        # Method 1: Direct thumbnail field
-        if info.get('thumbnail'):
-            thumbnail_url = info.get('thumbnail')
-        
-        # Method 2: Thumbnails array (get highest quality)
-        elif info.get('thumbnails') and isinstance(info.get('thumbnails'), list):
-            thumbnails = info.get('thumbnails')
-            if thumbnails:
-                # Filter valid thumbnails with URLs
-                valid_thumbs = [t for t in thumbnails if t.get('url')]
-                if valid_thumbs:
-                    # Try to get the best quality (prefer https)
-                    https_thumbs = [t for t in valid_thumbs if t.get('url', '').startswith('https')]
-                    if https_thumbs:
-                        # Get the one with highest resolution or last in list
-                        best_thumb = max(https_thumbs, key=lambda x: (x.get('width', 0), x.get('height', 0)))
-                        thumbnail_url = best_thumb.get('url')
-                    else:
-                        # Fallback to any thumbnail
-                        thumbnail_url = valid_thumbs[-1].get('url')
-        
-        # Method 3: Other thumbnail fields
-        if not thumbnail_url:
-            thumbnail_url = info.get('thumbnail_url', '')
-        
-        # Method 4: Platform-specific fallbacks
-        if not thumbnail_url:
-            # For YouTube, construct thumbnail URL from video ID
-            if platform == 'YouTube' and info.get('id'):
+        # Platform-specific thumbnail extraction (Instagram needs special handling)
+        if platform == 'Instagram':
+            # Try multiple Instagram-specific fields first
+            thumbnail_url = (
+                info.get('thumbnail') or 
+                info.get('display_url') or 
+                info.get('thumbnail_url') or
+                ''
+            )
+            
+            # Try thumbnails array for Instagram
+            if not thumbnail_url and info.get('thumbnails'):
+                thumbnails = info.get('thumbnails')
+                if isinstance(thumbnails, list) and thumbnails:
+                    valid_thumbs = [t for t in thumbnails if t.get('url')]
+                    if valid_thumbs:
+                        # For Instagram, prefer square or highest resolution
+                        best_thumb = max(valid_thumbs, key=lambda x: (x.get('width', 0) * x.get('height', 0)))
+                        thumbnail_url = best_thumb.get('url', '')
+            
+            logger.info(f"Instagram thumbnail URL: {thumbnail_url[:100] if thumbnail_url else 'None (no thumbnail found)'}")
+        else:
+            # Standard thumbnail extraction for other platforms
+            # Method 1: Direct thumbnail field
+            if info.get('thumbnail'):
+                thumbnail_url = info.get('thumbnail')
+            
+            # Method 2: Thumbnails array (get highest quality)
+            elif info.get('thumbnails') and isinstance(info.get('thumbnails'), list):
+                thumbnails = info.get('thumbnails')
+                if thumbnails:
+                    # Filter valid thumbnails with URLs
+                    valid_thumbs = [t for t in thumbnails if t.get('url')]
+                    if valid_thumbs:
+                        # Try to get the best quality (prefer https)
+                        https_thumbs = [t for t in valid_thumbs if t.get('url', '').startswith('https')]
+                        if https_thumbs:
+                            # Get the one with highest resolution or last in list
+                            best_thumb = max(https_thumbs, key=lambda x: (x.get('width', 0), x.get('height', 0)))
+                            thumbnail_url = best_thumb.get('url')
+                        else:
+                            # Fallback to any thumbnail
+                            thumbnail_url = valid_thumbs[-1].get('url')
+            
+            # Method 3: Other thumbnail fields
+            if not thumbnail_url:
+                thumbnail_url = info.get('thumbnail_url', '')
+            
+            # Method 4: YouTube-specific fallback
+            if not thumbnail_url and platform == 'YouTube' and info.get('id'):
                 video_id = info.get('id')
                 thumbnail_url = f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg"
-            # For Instagram, try the display_url
-            elif platform == 'Instagram':
-                thumbnail_url = info.get('display_url', '')
-        
-        logger.info(f"Thumbnail URL for {platform}: {thumbnail_url[:100] if thumbnail_url else 'None'}")
+            
+            logger.info(f"Thumbnail URL for {platform}: {thumbnail_url[:100] if thumbnail_url else 'None'}")
         
         return AnalyzeResponse(
             title=info.get('title', 'Unknown'),

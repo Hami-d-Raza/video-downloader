@@ -48,6 +48,17 @@ async def test_instagram():
             print(f"  Duration: {info.get('duration', 'N/A')} seconds")
             print(f"  Uploader: {info.get('uploader', 'N/A')}")
             
+            # Check thumbnail
+            thumbnail = info.get('thumbnail') or info.get('display_url')
+            if thumbnail:
+                print(f"  Thumbnail: ✓ Found ({thumbnail[:60]}...)")
+            else:
+                print(f"  Thumbnail: ✗ Not found")
+                # Show available thumbnail fields for debugging
+                thumb_fields = {k: v for k, v in info.items() if 'thumb' in k.lower() or 'image' in k.lower() or 'display' in k.lower()}
+                if thumb_fields:
+                    print(f"  Available image fields: {list(thumb_fields.keys())}")
+            
             # Check available formats
             formats = info.get('formats', [])
             print(f"\n  Total formats available: {len(formats)}")
